@@ -6,6 +6,8 @@ import aiohttp
 import asyncio
 import os.path
 import pandas as pd
+import certifi
+import ssl
 from ast import literal_eval
 from datetime import datetime
 from itertools import groupby
@@ -70,8 +72,8 @@ def get_teams(data: pd.DataFrame) -> pd.DataFrame:
     homeTeams = data[['homeTeamID', 'homeTeamName', 'homeTeamIcon']]
     guestTeams = data[['guestTeamID', 'guestTeamName', 'guestTeamIcon']]
     cols = ['ID', 'name', 'icon']
-    homeTeams.set_axis(cols, axis=1, inplace=True)
-    guestTeams.set_axis(cols, axis=1, inplace=True)
+    homeTeams = homeTeams.set_axis(axis=1, labels=cols)
+    guestTeams = guestTeams.set_axis(axis=1, labels=cols)
     teams = pd.concat([homeTeams, guestTeams], ignore_index=True)
     teams.drop_duplicates(subset=['name'], inplace=True)
     teams = teams.sort_values('name').reset_index()
@@ -164,7 +166,9 @@ async def fetch_queries(queries: list) -> list:
     Returns:
         A List of responses.
     """
-    async with aiohttp.ClientSession() as session:
+    ssl_context = ssl.create_default_context(cafile=certifi.where())
+    conn = aiohttp.TCPConnector(ssl=ssl_context)
+    async with aiohttp.ClientSession(connector=conn) as session:
         tasks = map(
             lambda params: asyncio.ensure_future(query(session, params)),
             queries)
@@ -205,7 +209,7 @@ def parse_league(data: list) -> pd.DataFrame:
     cols = ['homeScore', 'guestScore', 'locID']
     matches[cols] = matches[cols].astype('Int64')
     cols = ['datetime', 'datetimeUTC']
-    matches[cols] = matches[cols].apply(pd.to_datetime)
+    matches[cols] = matches[cols].apply(lambda item : pd.to_datetime(item, errors="coerce"))
     return matches
 
 
